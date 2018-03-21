@@ -8,116 +8,119 @@
 #include <sstream>
 #include <iostream>
 
-enum class EventType {
+
+enum class EventType {                                                                  //enumeriamo i tipi di eventi possibili
+
 	KeyDown = sf::Event::KeyPressed,
-	KeyUp = sf::Event::KeyReleased,
-	MButtonDown = sf::Event::MouseButtonPressed,
-	MButtonUp = sf::Event::MouseButtonReleased,
-	MouseWheel = sf::Event::MouseWheelMoved,
+	KeyUp = sf::Event::KeyPressed,
 	WindowResized = sf::Event::Resized,
 	GainedFocus = sf::Event::GainedFocus,
 	LostFocus = sf::Event::LostFocus,
-	MouseEntered = sf::Event::MouseEntered,
-	MouseLeft = sf::Event::MouseLeft,
 	Closed = sf::Event::Closed,
 	TextEntered = sf::Event::TextEntered,
-	Keyboard = sf::Event::Count + 1, Mouse, Joystick
+	Keyboard = sf::Event::Count + 1                                                    //essendo gli enumeratori valori interi, l'ulitma riga previene 
+										                                               //ogni possibile "scontro" tra interi e impedisce che sia aggiunto 
+										                                               //qualcosa di più grande di valore rispetto a EventType
 };
 
-struct EventInfo {
-	EventInfo() { m_code = 0; }
-	EventInfo(int l_event) { m_code = l_event; }
-	union {
-		int m_code;
+struct EventInfo {                                                                     //struttura che associa un valore ad un tasto ed alla sua tipologia
+	 
+	EventInfo() {                                                                      //associa ad ogni tipologia di evento il numero corrispettivo a code, 0 se default
+		code = 0; 
+	}
+	EventInfo(int lEvent) {
+		code = lEvent;
+	}
+	union {                                                                            //usiamo union per salvare il codice dell'evento 
+		int code;
 	};
+
 };
 
-struct EventDetails {
-	EventDetails(const std::string& l_bindName)
-		: m_name(l_bindName) {
+struct EventDetails {                                                                  //ci aiuta a condividere le informazioni dell'evento con il codice che è usato in questa classe
+	EventDetails(const std::string& lBindName)
+		: name(lBindName) {
 		Clear();
 	}
-	std::string m_name;
+	std::string name;
+	sf::Vector2i size;
+	sf::Uint32 textEntered;
+	int keyCode;
 
-	sf::Vector2i m_size;
-	sf::Uint32 m_textEntered;
-	sf::Vector2i m_mouse;
-	int m_mouseWheelDelta;
-	int m_keyCode; // Single key code.
-
-	void Clear() {
-		m_size = sf::Vector2i(0, 0);
-		m_textEntered = 0;
-		m_mouse = sf::Vector2i(0, 0);
-		m_mouseWheelDelta = 0;
-		m_keyCode = -1;
+	void Clear() {                                                                     //pulisce i valori di size, testo e tasto assegnati agli eventi
+		size = sf::Vector2i(0, 0);
+		textEntered = 0;
+		keyCode = -1;
 	}
 };
 
-using Events = std::vector<std::pair<EventType, EventInfo>>;
+using Events = std::vector<std::pair<EventType, EventInfo>>;                           //è un nuovo data type che ci permette di legare le informazioni degli eventi 
 
-struct Binding { //tiene le informazioni dell'evento
-	Binding(const std::string& l_name) : m_name(l_name), m_details(l_name), c(0) {}
+                                                                                      
+struct Binding {
+	Binding(const std::string& lName) : name(lName), details(lName), c(0) {}           //il costruttore prende il nome dell'azione che vogliamo legare all'evento 
+																					   //e usa la lista di inizializzazione per impostare i membri della classe
 	~Binding() {}
-	void BindEvent(EventType l_type, EventInfo l_info = EventInfo()) { //prende EventType e l'informazione di struttura, e l'aggiunge al vettore Events
-		m_events.emplace_back(l_type, l_info);
+
+	void BindEvent(EventType lType, EventInfo lInfo = EventInfo()) {                   //metodo che unisce un tipo di evento a una struttura con l'info dell'evento
+																					   //per aggiungerlo al vettore degli eventi
+		events.emplace_back(lType, lInfo);
 	}
+	Events events;
+	std::string name;
+	int c;                                                                             //contatore degli eventi che stanno accadendo
 
-	Events m_events;
-	std::string m_name;
-	int c; // "c" indica i processi in utilizzo
-
-	EventDetails m_details;
+	EventDetails details;
 };
 
-using Bindings = std::unordered_map<std::string, Binding*>; //contenitore dei CallBacks
-using CallbackContainer = std::unordered_map<std::string, std::function<void(EventDetails*)>>;//contenitore dello stato dei CallBacks
-enum class StateType;
-using Callbacks = std::unordered_map<StateType, CallbackContainer>;
+using Bindings = std::unordered_map<std::string, Binding*>;                            //garantisce che ci sia soltanto un binding per azione, in quanto abbiamo 
+                                                                                       //un contenitore associativo con i nomi delle azioni legate al tasto che li coinvolge. 
+                                                                                       //Usiamo unordered_map per associare ad ogni azione un solo tasto.
+using CallbackContainer = std::unordered_map < std::string, std::function<void(EventDetails*) >>;   /*std::function è un "involucro" di funzioni polimorfico a generico scopo, 
+																									può involucrare ogni tipo di elemento "chiamabile"*/
+using Callbacks = std::unordered_map <std::string, std::function<void(EventDetails*)>>;
 
 class EventManager {
-public:
+public:                                                                                
 	EventManager();
 	~EventManager();
 
-	bool AddBinding(Binding *l_binding);
-	bool RemoveBinding(std::string l_name);
+	bool AddBinding(Binding* lBinding);                                              
+	bool RemoveBinding(std::string lName);                                           
 
-	void SetCurrentState(StateType l_state);
-	void SetFocus(const bool& l_focus);
+	void SetFocus(const bool& lFocus);
 
-	// Needs to be defined in the header!
-	template<class T>
-	bool AddCallback(StateType l_state, const std::string& l_name,
-		void(T::*l_func)(EventDetails*), T* l_instance)
+	template <class T>                                                       
+	bool AddCallback(const std::string lName, void(T::*lFunc)(EventDetails*), T* lIstance) 
 	{
-		auto itr = m_callbacks.emplace(l_state, CallbackContainer()).first;
-		auto temp = std::bind(l_func, l_instance, std::placeholders::_1);
-		return itr->second.emplace(l_name, temp).second;
+
+		auto temp = std::bind(lFunc, lIstance, std::placeholders::_1);       /*il bind, con l'aiuto del placeholder, aiuta a monitorare la 
+																			 posizione e il numero di valori che sono usati dalla funzione.
+																			 I placeholder sono uno spazio di nomi che direziona la posizione
+																			 di un valore in una funzione. */
+		return callbacks.emplace(lName, temp).second;
 	}
 
-	bool RemoveCallback(StateType l_state, const std::string& l_name) {
-		auto itr = m_callbacks.find(l_state);
-		if (itr == m_callbacks.end()) { return false; }
-		auto itr2 = itr->second.find(l_name);
-		if (itr2 == itr->second.end()) { return false; }
-		itr->second.erase(l_name);
-		return true;
+	void RemoveCallback(const std::string& lName) {
+		callbacks.erase(lName);
 	}
 
-	void HandleEvent(sf::Event& l_event);
+	void HandleEvent(sf::Event& lEvent);
 	void Update();
 
-	// Getters.
-	sf::Vector2i GetMousePos(sf::RenderWindow* l_wind = nullptr) {
-		return (l_wind ? sf::Mouse::getPosition(*l_wind) : sf::Mouse::getPosition());
-	}
+	
 private:
 	void LoadBindings();
 
-	StateType m_currentState;
-	Bindings m_bindings;
-	Callbacks m_callbacks;
-
-	bool m_hasFocus;
+	Bindings bindings;
+	Callbacks callbacks;
+	bool hasFocus;
 };
+
+
+
+
+
+
+
+

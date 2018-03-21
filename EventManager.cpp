@@ -1,107 +1,87 @@
 #include "EventManager.h"
 
-EventManager::EventManager()
-	:m_currentState(StateType(0)), m_hasFocus(true)
-{
-	LoadBindings();
-}
+EventManager::EventManager() : hasFocus(true) { LoadBindings(); }        /*chiama il metodo LoadBindings che è usato per caricare
+																		 le informazioni sui nostri legami da un file. */
 
 EventManager::~EventManager() {
-	for (auto &itr : m_bindings) {
+	for (auto &itr : bindings) {
 		delete itr.second;
+		itr.second = nullptr;
 	}
 }
 
-bool EventManager::AddBinding(Binding *l_binding) {
-	if (m_bindings.find(l_binding->m_name) != m_bindings.end())
+bool EventManager::AddBinding(Binding *l_binding) {                       /*prende in ingresso un puntatore a Binding. Controlla se 
+																		  il Binding ha già un legame con lo stesso nome: se sì, il 
+																		  metodo ritorna false, altrimenti inserisce il nuovo legame 
+																		  nel container.*/
+	if (bindings.find(l_binding->name) != bindings.end())
 		return false;
 
-	return m_bindings.emplace(l_binding->m_name, l_binding).second;
+	return bindings.emplace(l_binding->name, l_binding).second;
 }
 
-bool EventManager::RemoveBinding(std::string l_name) {
-	auto itr = m_bindings.find(l_name);
-	if (itr == m_bindings.end()) { return false; }
+bool EventManager::RemoveBinding(std::string lName) {                      /*prende come argomento una stringa e cerca in Binding un 
+																		   riscontro per salvarlo in un'iteratore. Se trova un riscontro, 
+																		   prima elimina il secondo elemento nella coppia key-value, che 
+																		   è la memoria dinamicamente allocata per l'oggetto legato,
+																		   e poi elimina l'entrata dal container per poi ritornare true.*/
+	auto itr = bindings.find(lName);
+	if (itr == bindings.end()) { return false; }
 	delete itr->second;
-	m_bindings.erase(itr);
+	bindings.erase(itr);
 	return true;
 }
 
-void EventManager::SetCurrentState(StateType l_state) {
-	m_currentState = l_state;
-}
+void EventManager::SetFocus(const bool& lFocus) { hasFocus = lFocus; }
 
-void EventManager::SetFocus(const bool& l_focus) {
-	m_hasFocus = l_focus;
-}
-
-void EventManager::HandleEvent(sf::Event& l_event) {
-	//gestisce gli eventi SFML
-	for (auto &b_itr : m_bindings) {
-		Binding* bind = b_itr.second;
-		for (auto &e_itr : bind->m_events) {
-			EventType sfmlEvent = (EventType)l_event.type;
+void EventManager::HandleEvent(sf::Event& lEvent) {                      /*processa gli eventi SFML che sono trascinati in ogni iterazione
+                                                                          per "guardarli" e vedere se ci fosse qualcosa in cui siamo interessati.*/
+	
+	for (auto &b_itr : bindings) {
+		Binding* bind = b_itr.second;                                    /* Serve per iterare su tutti i Bindings e dentro ogni evento dentro il legame
+																		 per controllare se il tipo dell'argomento coincide col tipo dell'evento binding 
+																		 che è attualmente in atto. */
+		for (auto &e_itr : bind->events) {
+			EventType sfmlEvent = (EventType)lEvent.type;                /*crea la variabile che contiene il tipo dell'evento passato
+																         come argomento*/
 			if (e_itr.first != sfmlEvent) { continue; }
 			if (sfmlEvent == EventType::KeyDown || sfmlEvent == EventType::KeyUp) {
-				if (e_itr.second.m_code == l_event.key.code) {
-					// abbina gli eventi con il tasto
-					// aumenta c
-					if (bind->m_details.m_keyCode != -1) {
-						bind->m_details.m_keyCode = e_itr.second.m_code;
-					}
-					++(bind->c);
-					break;
-				}
-			}
-			else if (sfmlEvent == EventType::MButtonDown || sfmlEvent == EventType::MButtonUp) {
-				if (e_itr.second.m_code == l_event.mouseButton.button) {
-					// Matching event/keystroke.
-					// Increase count.
-					bind->m_details.m_mouse.x = l_event.mouseButton.x;
-					bind->m_details.m_mouse.y = l_event.mouseButton.y;
-					if (bind->m_details.m_keyCode != -1) {
-						bind->m_details.m_keyCode = e_itr.second.m_code;
+				if (e_itr.second.code == lEvent.key.code) {
+					// leghiamo l'evento alla pressione del pulsante.
+					// Incremento count.
+					if (bind->details.keyCode != -1) {
+						bind->details.keyCode = e_itr.second.code;
 					}
 					++(bind->c);
 					break;
 				}
 			}
 			else {
-				// No need for additional checking.
-				if (sfmlEvent == EventType::MouseWheel) {
-					bind->m_details.m_mouseWheelDelta = l_event.mouseWheel.delta;
-				}
-				else if (sfmlEvent == EventType::WindowResized) {
-					bind->m_details.m_size.x = l_event.size.width;
-					bind->m_details.m_size.y = l_event.size.height;
+			
+				if (sfmlEvent == EventType::WindowResized) {
+					bind->details.size.x = lEvent.size.width;
+					bind->details.size.y = lEvent.size.height;
 				}
 				else if (sfmlEvent == EventType::TextEntered) {
-					bind->m_details.m_textEntered = l_event.text.unicode;
+					bind->details.textEntered = lEvent.text.unicode;
 				}
 				++(bind->c);
 			}
 		}
 	}
+
 }
 
 void EventManager::Update() {
-	if (!m_hasFocus) { return; }
-	for (auto &b_itr : m_bindings) {
+	if (!hasFocus) { return; }
+	for (auto &b_itr : bindings) {
 		Binding* bind = b_itr.second;
-		for (auto &e_itr : bind->m_events) {
+		for (auto &e_itr : bind->events) {
 			switch (e_itr.first) {
 			case(EventType::Keyboard):
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key(e_itr.second.m_code))) {
-					if (bind->m_details.m_keyCode != -1) {
-						bind->m_details.m_keyCode = e_itr.second.m_code;
-					}
-					++(bind->c);
-				}
-				break;
-			case(EventType::Mouse):
-				if (sf::Mouse::isButtonPressed(sf::Mouse::Button(e_itr.second.m_code))) {
-					if (bind->m_details.m_keyCode != -1) {
-						bind->m_details.m_keyCode = e_itr.second.m_code;
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key(e_itr.second.code))) {
+					if (bind->details.keyCode != -1) {
+						bind->details.keyCode = e_itr.second.code;
 					}
 					++(bind->c);
 				}
@@ -109,60 +89,16 @@ void EventManager::Update() {
 			}
 		}
 
-		if (bind->m_events.size() == bind->c) {
-			auto stateCallbacks = m_callbacks.find(m_currentState);
-			auto otherCallbacks = m_callbacks.find(StateType(0));
-
-			if (stateCallbacks != m_callbacks.end()) {
-				auto callItr = stateCallbacks->second.find(bind->m_name);
-				if (callItr != stateCallbacks->second.end()) {
-					// Pass in information about events.
-					callItr->second(&bind->m_details);
-				}
-			}
-
-			if (otherCallbacks != m_callbacks.end()) {
-				auto callItr = otherCallbacks->second.find(bind->m_name);
-				if (callItr != otherCallbacks->second.end()) {
-					// Pass in information about events.
-					callItr->second(&bind->m_details);
-				}
+		if (bind->events.size() == bind->c) {                           /*controlliamo se il numero di eventi nel container corrisponde col numero di 
+																		eventi che sono in funzione. Se sì, localiziamo il nostro callback container
+																		e invochiamo il secondo membro, ed essendo un wrapper noi implementiamo anche 
+																		ufficialmente il callback del secondo membro. */
+			auto callItr = callbacks.find(bind->name);
+			if (callItr != callbacks.end()) {
+				callItr->second(&bind->details);
 			}
 		}
 		bind->c = 0;
-		bind->m_details.Clear();
+		bind->details.Clear();
 	}
-}
-
-void EventManager::LoadBindings() {
-	std::string delimiter = ":";
-
-	std::ifstream bindings;
-	bindings.open("keys.cfg");
-	if (!bindings.is_open()) { std::cout << "! Failed loading keys.cfg." << std::endl; return; }
-	std::string line;
-	while (std::getline(bindings, line)) {
-		std::stringstream keystream(line);
-		std::string callbackName;
-		keystream >> callbackName;
-		Binding* bind = new Binding(callbackName);
-		while (!keystream.eof()) {
-			std::string keyval;
-			keystream >> keyval;
-			int start = 0;
-			int end = keyval.find(delimiter);
-			if (end == std::string::npos) { delete bind; bind = nullptr; break; }
-			EventType type = EventType(stoi(keyval.substr(start, end - start))); //"stoi" converte da intero a stringa
-			int code = stoi(keyval.substr(end + delimiter.length(),
-				keyval.find(delimiter, end + delimiter.length())));
-
-			EventInfo eventInfo;
-			eventInfo.m_code = code;
-			bind->BindEvent(type, eventInfo);
-		}
-
-		if (!AddBinding(bind)) { delete bind; }
-		bind = nullptr;
-	}
-	bindings.close();
 }
