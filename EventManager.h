@@ -88,6 +88,7 @@ public:
 	bool AddBinding(Binding* lBinding);                                              
 	bool RemoveBinding(std::string lName);                                           
 
+	void SetCurrentState(StateType lState);
 	void SetFocus(const bool& lFocus);
 
 	template <class T>                                                       

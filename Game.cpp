@@ -1,38 +1,36 @@
 #include "Game.h"
-Game::Game() : m_window("Game Project", sf::Vector2u(800, 600)), m_stateManager(&m_context) { //il costruttore prende "m_window" e "m_stateManager"
-	m_clock.restart(); //metodo di m_clock
-	srand(time(nullptr)); //inizializza un numero randomico passato come seed, è inizializzato con il valore di ritorno della funzione time 
 
-	m_context.m_wind = &m_window; //m_wind è un attributo di m_context 
-	m_context.m_eventManager = m_window.GetEventManager(); //chiama GetEventManager di window
-
-	m_stateManager.SwitchTo(StateType::Intro);//metodo di m_stateManager a cui è passato "StateType::Intro"
+void Game::MoveSprite(EventDetails* lDetails) {
+	sf::Vector2i mousepos = window.GetEventManager()->GetMousePos(window.GetRenderWindow());
+	sprite.setPosition(mousepos.x, mousepos.y);
+	std::cout << "Moving sprite to: " << mousepos.x << ":" << mousepos.y << std::endl;
 }
 
-Game::~Game() { }
+Game::Game() : window("Chapter 4", sf::Vector2u(800, 600)) {
+	Clock.restart();
+	srand(time(nullptr));
 
-sf::Time Game::GetElapsed() {
-	return m_clock.getElapsedTime();
+	texture.loadFromFile("Mushroom.png");
+	sprite.setTexture(texture);
+	sprite.setOrigin(texture.getSize().x / 2, texture.getSize().y / 2);
+	sprite.setPosition(0, 0);
+
+	window.GetEventManager()->AddCallback("Move", &Game::MoveSprite, this);
 }
-void Game::RestartClock() { 
-	m_elapsed = m_clock.restart(); 
-}
-Window* Game::GetWindow() {
-	return &m_window;
-}
+
+Game::~Game() {}
+
+sf::Time Game::GetElapsed() { return Clock.getElapsedTime(); }
+void Game::RestartClock() { Clock.restart(); }
+Window* Game::GetWindow() { return &window; }
 
 void Game::Update() {
-	m_window.Update();
-	m_stateManager.Update(m_elapsed);
+	window.Update();
 }
 
 void Game::Render() {
-	m_window.BeginDraw(); //inizia a disegnare
-	m_stateManager.Draw();
-	m_window.EndDraw();
-}
-
-void Game::LateUpdate() {
-	m_stateManager.ProcessRequests(); //tiene traccia degli StateType che vogliamo rimuovere e li rimuove quando non vengono più usati
-	RestartClock();
+	window.BeginDraw();
+	// Render here.
+	window.GetRenderWindow()->draw(sprite);
+	window.EndDraw();
 }

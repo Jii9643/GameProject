@@ -1,7 +1,7 @@
 #include "StateManager.h"
 
-StateManager::StateManager(SharedContext* l_shared)
-	: m_shared(l_shared)
+
+StateManager::StateManager(SharedContext* lShared)	: shared(lShared)
 {
 	RegisterState<State_Intro>(StateType::Intro);
 	RegisterState<State_MainMenu>(StateType::MainMenu);
@@ -9,122 +9,111 @@ StateManager::StateManager(SharedContext* l_shared)
 	RegisterState<State_Paused>(StateType::Paused);
 }
 
-StateManager::~StateManager() {
-	for (auto &itr : m_states) {
+StateManager::~StateManager() {                                            /*itera su tutti gli stati ed elimina il secondo valore della coppia*/
+	for (auto &itr : states) {
 		itr.second->OnDestroy();
 		delete itr.second;
 	}
 }
 
-void StateManager::Update(const sf::Time& l_time) {
-	if (m_states.empty()) { return; }
-	if (m_states.back().second->IsTranscendent() && m_states.size() > 1) {
-		auto itr = m_states.end();
-		while (itr != m_states.begin()) {
-			if (itr != m_states.end()) {
+void StateManager::Update(const sf::Time& lTime) {                        /*il funzionamento è uguale a quello di draw, cambia solo il check per la flag della trascendent
+																		  la quale updata*/
+	if (states.empty()) { return; }
+	if (states.back().second->IsTranscendent() && states.size() > 1) {
+		auto itr = states.end();
+		while (itr != states.begin()) {
+			if (itr != states.end()) {
 				if (!itr->second->IsTranscendent()) {
 					break;
 				}
 			}
 			--itr;
 		}
-		for (; itr != m_states.end(); ++itr) {
-			itr->second->Update(l_time);
+		for (; itr != states.end(); ++itr) {
+			itr->second->Update(time);
 		}
 	}
 	else {
-		m_states.back().second->Update(l_time);
+		states.back().second->Update(time);
 	}
 }
 
 void StateManager::Draw() {
-	if (m_states.empty()) { return; }
-	if (m_states.back().second->IsTransparent() && m_states.size() > 1) {
-		auto itr = m_states.end();
-		while (itr != m_states.begin()) {
-			if (itr != m_states.end()) {
-				if (!itr->second->IsTransparent()) {
+	if (states.empty()) { return; }                                       /*controlla se lo state container è vuoto, se non lo è, allora controlla anche la trasnsparency
+																		  per controllare quanti stati sono nello stack*/
+	if (states.back().second->IsTransparent() && states.size() > 1) {     /*se c'è solo uno stato nello stack oppure transparent è false, allora invochiamo il suo metodo draw*/
+		auto itr = states.end();
+		while (itr != states.begin()) {
+			if (itr != states.end()) {
+				if (!itr->second->IsTransparent()) {                      /*per renderizzare correttamente gli stati trasparenti, dobbiamo chiamare il loro rispettivo metodo draw
+																		  dove il più vecchio stato sullo stack viene disegnato per ultimo, questo viene fatto backward, fino a trovare
+																		  uno stato che non è trasparente*/
 					break;
 				}
 			}
 			--itr;
 		}
-		for (; itr != m_states.end(); ++itr) {
+		for (; itr != states.end(); ++itr) {                              /*dopo averlo trovato il for permette di invocare il draw su tutti gli stati a partire da quello trovato*/
 			itr->second->Draw();
 		}
 	}
 	else {
-		m_states.back().second->Draw();
+		states.back().second->Draw();                                     
 	}
 }
 
-SharedContext* StateManager::GetContext() { return m_shared; }
+SharedContext* StateManager::GetContext() { return shared; } 
 
-bool StateManager::HasState(const StateType& l_type) {
-	for (auto itr = m_states.begin();
-		itr != m_states.end(); ++itr)
+bool StateManager::HasState(const StateType& lType) {                    /*metodo che controlla se uno stato si trova o meno sullo stack*/
+	for (auto itr = states.begin();
+		itr != states.end(); ++itr)
 	{
-		if (itr->first == l_type) {
-			auto removed = std::find(m_toRemove.begin(), m_toRemove.end(), l_type);
-			if (removed == m_toRemove.end()) { return true; }
+		if (itr->first == lType) {
+			auto removed = std::find(toRemove.begin(), toRemove.end(), lType);
+			if (removed == toRemove.end()) { return true; }
 			return false;
 		}
 	}
 	return false;
 }
 
-void StateManager::ProcessRequests() {
-	while (m_toRemove.begin() != m_toRemove.end()) {
-		RemoveState(*m_toRemove.begin());
-		m_toRemove.erase(m_toRemove.begin());
+void StateManager::ProcessRequests() {                                  /*itera sul vettore toRemove e invoca il metodo primato removeState, il quale eseguirà la dealocazione,
+																	    e pulisce il vettore remove per renderlo vuoto*/
+	while (toRemove.begin() != toRemove.end()) {
+		RemoveState(*toRemove.begin());
+		toRemove.erase(toRemove.begin());
 	}
 }
 
-void StateManager::SwitchTo(const StateType& l_type) {
-	m_shared->m_eventManager->SetCurrentState(l_type);
-	for (auto itr = m_states.begin();
-		itr != m_states.end(); ++itr)
+void StateManager::SwitchTo(const StateType& lType) {                  /*tramite lo shared accediamo all'eventManager e chiamiamo il metodo setCurrentState*/
+	shared->eventManager->SetCurrentState(lType);                      /*accede all'eventManager con shared*/
+	for (auto itr = states.begin();                                    /*iteriamo gli stati dove il corrente che sta per essere pushato indietro, verrà disattivato
+																	   questo permette di finire le sue azioni prima di essere dismesso*/
+		itr != states.end(); ++itr)
 	{
-		if (itr->first == l_type) {
-			m_states.back().second->Deactivate();
-			StateType tmp_type = itr->first;
+		if (itr->first == lType) {
+			states.back().second->Deactivate();
+			StateType tmp_type = itr->first;                          /*creiamo due variabili temporanee per far mantenere le informazioni mentre avviene lo switch
+																	  sia dello statetipe che dell'oggetto, questo ci permette di non perdere l'informazione quando
+																	  viene chiamato l'erase*/
 			BaseState* tmp_state = itr->second;
-			m_states.erase(itr);
-			m_states.emplace_back(tmp_type, tmp_state);
-			tmp_state->Activate();
+			states.erase(itr);
+			states.emplace_back(tmp_type, tmp_state);                 
+			tmp_state->Activate();                                     /*per passare allo stato che vogliamo, facciamo il push back nel vettore e gli passiamo le due variabili temporanee*/
+																	 
+		}
 			return;
 		}
 	}
 
-	// State with l_type wasn't found.
-	if (!m_states.empty()) { m_states.back().second->Deactivate(); }
-	CreateState(l_type);
-	m_states.back().second->Activate();
+	if (!states.empty()) { states.back().second->Deactivate(); }     /*dobbiamo prima disattivare i metodi, successivamente prendiamo lo stato sul vettore più recente e lo attiviamo,
+																	 qualora il vettore degli stati non avesse quel vettore*/
+	CreateState(type);
+	states.back().second->Activate();                                
 }
 
-void StateManager::Remove(const StateType& l_type) {
-	m_toRemove.push_back(l_type);
+
+void StateManager::Remove(const StateType& lType) {                     /*pusha uno state type nel vettore remove che sarà poi processato del processRequest*/
+	toRemove.push_back(lType);
 }
 
-// Private methods.
-
-void StateManager::CreateState(const StateType& l_type) {
-	auto newState = m_stateFactory.find(l_type);
-	if (newState == m_stateFactory.end()) { return; }
-	BaseState* state = newState->second();
-	m_states.emplace_back(l_type, state);
-	state->OnCreate();
-}
-
-void StateManager::RemoveState(const StateType& l_type) {
-	for (auto itr = m_states.begin();
-		itr != m_states.end(); ++itr)
-	{
-		if (itr->first == l_type) {
-			itr->second->OnDestroy();
-			delete itr->second;
-			m_states.erase(itr);
-			return;
-		}
-	}
-}

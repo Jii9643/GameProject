@@ -32,6 +32,11 @@ bool EventManager::RemoveBinding(std::string lName) {                      /*pre
 	return true;
 }
 
+void EventManager::SetCurrentState(StateType lState) 
+{
+	currentState = lState;
+}
+
 void EventManager::SetFocus(const bool& lFocus) { hasFocus = lFocus; }
 
 void EventManager::HandleEvent(sf::Event& lEvent) {                      /*processa gli eventi SFML che sono trascinati in ogni iterazione
@@ -101,4 +106,58 @@ void EventManager::Update() {
 		bind->c = 0;
 		bind->details.Clear();
 	}
+}
+
+void EventManager::LoadBindings() {                                     /*carichiamo da file dei legami (nome,codice tipo : codice evento)*/
+	std::string delimiter = ":";
+
+	std::ifstream bindings;                                             /*bindings è un oggetto di tipo ifstream che ci permette di eseguire operazioni
+																		di input/output sul file associato(se presenti)*/
+	bindings.open("keys.cfg");
+	if (!bindings.is_open()) { std::cout << "! Failed loading keys.cfg." << std::endl; return; }
+	std::string line;
+	while (std::getline(bindings, line)) {
+		std::stringstream keystream(line);                              /*stringstream è un oggetto che permette di leggere, mediante un buffer di stringhe,
+																		i valori sul file pezzo per pezzo, usando l'operatore >>, trattandoli come stringhe*/
+		std::string callbackName;                                        
+		keystream >> callbackName;
+		Binding* bind = new Binding(callbackName);                      /*dopo aver ottenuto il nome del nostro legame, creiamo un nuovo oggetto"Binding"
+																		e passiamo il nome al costruttore*/
+		while (!keystream.eof()) {                                      /*eof indica End of File, ovvero eseguiamo il while fino a quando l'oggetto stringstream
+																		non raggiunge la fine della linea che sta leggendo*/
+									
+			std::string keyval;                                         /*dopo aver letto i valori numerici da file, dobbiamo convertirli in due valori interi
+																		i quali verranno salvari nelle rispettive variabili locali. Operazione eseguita dal delimiter*/
+			keystream >> keyval;
+			int start = 0;                                             
+			int end = keyval.find(delimiter);
+			if (end == std::string::npos)                               /*se il non viene trovato nella stringa, allora l'istanza binding viene eliminata,
+																		e passa alla linea successiva*/
+			{
+				delete bind;
+				bind = nullptr;
+				break; 
+			}                                                           
+			EventType type = EventType(stoi(keyval.substr(start, end - start))); /*la conversione viene eseguita dal metodo stoi; mediante substr prendiamo la coppia
+																				 keyvalue, partendo dall'inizio del codice ed arrivando fino alla coppia successiva.
+																				 type contiene quindi la conversione in valore del tipo di evento che è stato passato
+																				 tramite stringa*/
+			int sCode = stoi(keyval.substr(end + delimiter.length(),             
+				keyval.find(delimiter, end + delimiter.length())));              /*il metodo find delimiter ci permette di trovare nella serie di valori i ":" presenti
+																				 così da indicare a stoi quale parte del codice convertire, in quanto andrà da delimiter
+																				 all fine + la lunghezza del delimiter stesso*/
+			EventInfo eventInfo;                                                 
+			eventInfo.code = sCode;                                              /*il valore appena convertito cioè sCode viene messo nel code di eventInfo*/
+			bind->BindEvent(type, eventInfo);                                    /*creiamo il legame chiamando su bind il BindEvent passandogli type e eventInfo*/
+		}
+
+		if (!AddBinding(bind))                                                   /*proviamo ad aggiungere il bind all'event Manager. Utiliziamo un if, per evitare
+																				 i problemi di scontro tra i vari binding, come la presenza dello stesso codice. Altrimenti
+																				 lo eliminiamo*/
+		{ 
+			delete bind; 
+		}
+		bind = nullptr;
+	}
+	bindings.close();
 }
